@@ -14,7 +14,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="Controllers\" />
+    <ProjectReference Include="..\..\External\Pejvak-Product.Persistences\Pejvak-Product.Persistences.csproj" />
   </ItemGroup>
 
 </Project>

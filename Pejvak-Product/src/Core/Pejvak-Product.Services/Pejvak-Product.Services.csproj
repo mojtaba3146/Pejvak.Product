@@ -7,4 +7,12 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <Folder Include="ProductInstances\Exceptions\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Pejvak-Product.Domain\Pejvak-Product.Domain.csproj" />
+  </ItemGroup>
+
 </Project>

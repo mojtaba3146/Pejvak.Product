@@ -12,6 +12,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\Core\Pejvak-Product.Domain\Pejvak-Product.Domain.csproj" />
     <ProjectReference Include="..\..\Core\Pejvak-Product.Services\Pejvak-Product.Services.csproj" />
   </ItemGroup>
 
