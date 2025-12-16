@@ -6,5 +6,6 @@ namespace Pejvak_Product.Services.ProductHolders.Contracts
     public interface IProductHolderQuery : IScope
     {
         Task<GetProductHolderDto?> GetProductHolder();
+        Task<List<GetUserAvailableFeaturesDto>> GetUserAvailableFeatures(int userId);
     }
 }

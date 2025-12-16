@@ -1,5 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Pejvak_Product.Domain.GroupPrices;
+using Pejvak_Product.Domain.ProductInstanceProperties;
 using Pejvak_Product.Domain.ProductProductGroups;
 using Pejvak_Product.Domain.T_ProductHolders;
 using Pejvak_Product.Domain.T_ProductInstances;
@@ -19,6 +20,8 @@ namespace Pejvak_Product.Persistences.Infrastructure
         public DbSet<Domain.ProductProperties.T_ProductProperties> ProductProperties { get; set; }
         public DbSet<T_GroupPrice> GroupPrices { get; set; }
         public DbSet<T_ProductProductGroup> ProductProductGroups { get; set; }
+        public DbSet<Domain.ExtraFeatures.T_ExtraFeatures> ExtraFeatures { get; set; }
+        public DbSet<Domain.ProductInstanceProperties.T_ProductInstanceProperties> ProductInstanceProperties { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {

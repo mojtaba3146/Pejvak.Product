@@ -9,6 +9,7 @@ namespace Pejvak_Product.Persentation.Controllers
     public class ProductHoldersController : ControllerBase
     {
         private readonly IProductHolderQuery _productHolderQuery;
+        int _userId = 2848;
 
         public ProductHoldersController(IProductHolderQuery productHolderQuery)
         {
@@ -20,6 +21,13 @@ namespace Pejvak_Product.Persentation.Controllers
         {
             return await _productHolderQuery
                 .GetProductHolder();
+        }
+
+        [HttpGet("available-features/{userId}")]
+        public async Task<List<GetUserAvailableFeaturesDto>> GetUserAvailableFeatures(int userId)
+        {
+            return await _productHolderQuery
+                .GetUserAvailableFeatures(userId);
         }
     }
 }
