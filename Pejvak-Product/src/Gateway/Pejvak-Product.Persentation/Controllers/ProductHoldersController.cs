@@ -9,7 +9,6 @@ namespace Pejvak_Product.Persentation.Controllers
     public class ProductHoldersController : ControllerBase
     {
         private readonly IProductHolderQuery _productHolderQuery;
-        int _userId = 2848;
 
         public ProductHoldersController(IProductHolderQuery productHolderQuery)
         {
