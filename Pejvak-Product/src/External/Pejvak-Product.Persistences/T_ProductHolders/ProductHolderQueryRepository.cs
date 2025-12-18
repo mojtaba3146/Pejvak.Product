@@ -66,7 +66,18 @@ namespace Pejvak_Product.Persistences.T_ProductHolders
                 .Distinct()
                 .ToList();
 
-            var allExtraFeatures = await _context.ExtraFeatures
+            var productIds = results
+               .Where(_ => _.ProductId.HasValue)
+               .Select(_ => _.ProductId!.Value)
+               .Distinct()
+               .ToList();
+
+            if (!productIds.Any())
+            {
+                return results;
+            }
+
+            var allExtraFeatures = await  _context.ExtraFeatures
                 .Where(ef => productInstanceIds.Contains(ef.ProductInstanceId!.Value)
                     && ef.IsDeleted == isDeleted
                     && ef.Confirmed == 1)
@@ -74,74 +85,11 @@ namespace Pejvak_Product.Persistences.T_ProductHolders
                 .AsNoTracking()
                 .ToListAsync();
 
-            var productInstanceToBoughtPropertyIds = new Dictionary<int, List<int>>();
-            var allBoughtPropertyIds = new List<int>();
-
-            foreach (var extraFeature in allExtraFeatures)
-            {
-                if (extraFeature.ProductInstanceId.HasValue && !string.IsNullOrWhiteSpace(extraFeature.ExtraFeatures))
-                {
-                    var propertyIds = extraFeature.ExtraFeatures
-                        .Split(',', StringSplitOptions.RemoveEmptyEntries)
-                        .Select(id => id.Trim())
-                        .Where(id => int.TryParse(id, out _))
-                        .Select(int.Parse)
-                        .Distinct()
-                        .ToList();
-
-                    if (propertyIds.Any())
-                    {
-                        var productInstanceId = extraFeature.ProductInstanceId.Value;
-
-                        if (!productInstanceToBoughtPropertyIds.ContainsKey(productInstanceId))
-                        {
-                            productInstanceToBoughtPropertyIds[productInstanceId] = new List<int>();
-                        }
-
-                        productInstanceToBoughtPropertyIds[productInstanceId].AddRange(propertyIds);
-                        allBoughtPropertyIds.AddRange(propertyIds);
-                    }
-                }
-            }
-
-            allBoughtPropertyIds = allBoughtPropertyIds.Distinct().ToList();
-
-            var productIds = results
-                .Where(_ => _.ProductId.HasValue)
-                .Select(_ => _.ProductId!.Value)
-                .Distinct()
-                .ToList();
-
-            if (!productIds.Any())
-            {
-                return results;
-            }
-
             var allProductProductGroups = await _context.ProductProductGroups
-                .Where(_ => _.IsDeleted == isDeleted)
-                .Select(_ => new { _.ProductIds, _.PropertyId })
-                .AsNoTracking()
-                .ToListAsync();
-
-            var productIdToPropertyIds = new Dictionary<int, List<int>>();
-
-            foreach (var productId in productIds)
-            {
-                var productIdStr = productId.ToString();
-                var propertyIds = allProductProductGroups
-                    .Where(_ => _.ProductIds.Contains("," + productIdStr + ",") ||
-                                _.ProductIds.StartsWith(productIdStr + ",") ||
-                                _.ProductIds.EndsWith("," + productIdStr) ||
-                                _.ProductIds == productIdStr)
-                    .Select(_ => _.PropertyId)
-                    .Distinct()
-                    .ToList();
-
-                if (propertyIds.Any())
-                {
-                    productIdToPropertyIds[productId] = propertyIds;
-                }
-            }
+               .Where(_ => _.IsDeleted == isDeleted)
+               .Select(_ => new { _.ProductIds, _.PropertyId })
+               .AsNoTracking()
+               .ToListAsync();
 
             var allProductInstanceProperties = await _context.ProductInstanceProperties
                 .Where(pip => productIds.Contains(pip.ProductId!.Value)
@@ -157,53 +105,88 @@ namespace Pejvak_Product.Persistences.T_ProductHolders
                 .AsNoTracking()
                 .ToListAsync();
 
+
+            var productInstanceToBoughtPropertyIds = new Dictionary<int, List<int>>();
+            var allBoughtPropertyIds = new HashSet<int>();
+
+            foreach (var extraFeature in allExtraFeatures)
+            {
+                if (extraFeature.ProductInstanceId.HasValue && !string.IsNullOrWhiteSpace(extraFeature.ExtraFeatures))
+                {
+                    var propertyIds = ParsePropertyIds(extraFeature.ExtraFeatures);
+
+                    if (productIds.Count > 0)
+                    {
+                        var productInstanceId = extraFeature.ProductInstanceId.Value;
+
+                        if (!productInstanceToBoughtPropertyIds.TryGetValue(productInstanceId, out var list))
+                        {
+                            list = new List<int>();
+                            productInstanceToBoughtPropertyIds[productInstanceId] = list;
+                        }
+
+                        list.AddRange(propertyIds);
+                        allBoughtPropertyIds.UnionWith(propertyIds);
+                    }
+                }
+            }
+
+            var productIdStrings = productIds.Select(id => id.ToString()).ToList();
+            var productIdToPropertyIds = new Dictionary<int, List<int>>();
+
+            foreach (var productId in productIds)
+            {
+                var productIdStr = productId.ToString();
+                var propertyIds = allProductProductGroups
+                    .Where(_ => MatchesProductId(_.ProductIds, productIdStr))
+                    .Select(_ => _.PropertyId)
+                    .Distinct()
+                    .ToList();
+
+                if (propertyIds.Count > 0)
+                {
+                    productIdToPropertyIds[productId] = propertyIds;
+                }
+            }
+
             var productIdToDefaultPropertyIds = new Dictionary<int, List<int>>();
 
             foreach (var productId in productIds)
             {
                 var defaultPropertyIds = ResolveDefaultProperties(productId, allProductInstanceProperties);
-                if (defaultPropertyIds.Any())
+                if (defaultPropertyIds.Count > 0)
                 {
                     productIdToDefaultPropertyIds[productId] = defaultPropertyIds;
                 }
             }
 
-            var allRegularPropertyIds = productIdToPropertyIds.Values
-                .SelectMany(_ => _)
-                .Distinct()
-                .ToList();
+            var allUniquePropertyIds = new HashSet<int>();
 
-            var allDefaultPropertyIds = productIdToDefaultPropertyIds.Values
-                .SelectMany(_ => _)
-                .Distinct()
-                .ToList();
+            foreach (var list in productIdToPropertyIds.Values)
+                allUniquePropertyIds.UnionWith(list);
 
-            var allUniquePropertyIds = allRegularPropertyIds
-                .Union(allDefaultPropertyIds)
-                .Union(allBoughtPropertyIds)
-                .Distinct()
-                .ToList();
+            foreach (var list in productIdToDefaultPropertyIds.Values)
+                allUniquePropertyIds.UnionWith(list);
 
-            if (!allUniquePropertyIds.Any())
+            allUniquePropertyIds.UnionWith(allBoughtPropertyIds);
+
+            if (allUniquePropertyIds.Count == 0)
             {
                 return results;
             }
 
             var properties = await _context.ProductProperties
                 .Where(prop => allUniquePropertyIds.Contains(prop.Id) && prop.IsDeleted == isDeleted)
-                .GroupJoin(_context.GroupPrices.Where(gp => gp.IsDeleted == isDeleted && gp.IsActive == isActive),
+                .Join(_context.GroupPrices.Where(gp => gp.IsDeleted == isDeleted && gp.IsActive == isActive),
                     prop => prop.Id,
                     gp => gp.PropertyId,
-                    (prop, groupPrices) => new { prop, groupPrices })
-                .SelectMany(
-                    x => x.groupPrices.DefaultIfEmpty(),
-                    (x, gp) => new
+                    (prop, groupPrices) => new 
                     {
-                        PropertyId = x.prop.Id,
-                        PropertyTitle = x.prop.PropertyTitle,
-                        PropertyUnicode = x.prop.UniqueCode,
-                        Price = gp != null ? (gp.Price ?? 0) : 0,
-                        PriceDescription = gp != null ? gp.Description : null
+                        PropertyId = prop.Id,
+                        PropertyTitle = prop.PropertyTitle,
+                        PropertyUnicode = prop.UniqueCode,
+                        Price =(groupPrices.Price ?? 0) ,
+                        PriceDescription =  groupPrices.Description
                     })
                 .AsNoTracking()
                 .ToListAsync();
@@ -219,13 +202,13 @@ namespace Pejvak_Product.Persistences.T_ProductHolders
             {
                 if (productInstanceToBoughtPropertyIds.TryGetValue(result.ProductInstanceId, out var boughtPropertyIds))
                 {
-                    result.UserbuyedProductProperties = boughtPropertyIds
+                    result.UserBoughtProductProperties = boughtPropertyIds
                         .Distinct()
                         .Where(propertyLookup.ContainsKey)
                         .Select(id =>
                         {
                             var prop = propertyLookup[id];
-                            return new GetUserbuyedProductPropertiesDto
+                            return new GetUserBoughtProductPropertiesDto
                             {
                                 PropertyId = prop.PropertyId,
                                 PropertyTitle = prop.PropertyTitle
@@ -242,43 +225,92 @@ namespace Pejvak_Product.Persistences.T_ProductHolders
                 if (productIdToPropertyIds.TryGetValue(productId, out var regularPropertyIds))
                 {
                     result.ProductProperties = regularPropertyIds
-                        .Where(propertyLookup.ContainsKey)
-                        .Select(id =>
-                        {
-                            var prop = propertyLookup[id];
-                            return new GetProductPropertiesDto
-                            {
-                                PropertyId = prop.PropertyId,
-                                PropertyTitle = prop.PropertyTitle,
-                                PropertyUnicode = prop.PropertyUnicode,
-                                Price = prop.Price,
-                                PriceDescription = prop.PriceDescription
-                            };
-                        })
-                        .ToList();
+                       .Where(propertyLookup.ContainsKey)
+                       .Select(id => new GetProductPropertiesDto
+                       {
+                           PropertyId = propertyLookup[id].PropertyId,
+                           PropertyTitle = propertyLookup[id].PropertyTitle,
+                           PropertyUnicode = propertyLookup[id].PropertyUnicode,
+                           Price = propertyLookup[id].Price,
+                           PriceDescription = propertyLookup[id].PriceDescription
+                       })
+                       .ToList();
                 }
 
                 if (productIdToDefaultPropertyIds.TryGetValue(productId, out var defaultPropertyIds))
                 {
                     result.DefaultProductProperties = defaultPropertyIds
                         .Where(propertyLookup.ContainsKey)
-                        .Select(id =>
+                        .Select(id => new GetDefaultProductPropertiesDto
                         {
-                            var prop = propertyLookup[id];
-                            return new GetDefaultProductPropertiesDto
-                            {
-                                PropertyId = prop.PropertyId,
-                                PropertyTitle = prop.PropertyTitle,
-                                PropertyUnicode = prop.PropertyUnicode,
-                                Price = prop.Price,
-                                PriceDescription = prop.PriceDescription
-                            };
+                            PropertyId = propertyLookup[id].PropertyId,
+                            PropertyTitle = propertyLookup[id].PropertyTitle,
+                            PropertyUnicode = propertyLookup[id].PropertyUnicode,
+                            Price = propertyLookup[id].Price,
+                            PriceDescription = propertyLookup[id].PriceDescription
                         })
                         .ToList();
                 }
+
+                var defaultPropertyIdSet = result.DefaultProductProperties
+                    .Select(p => p.PropertyId)
+                    .ToHashSet();
+
+                var boughtPropertyIdSet = result.UserBoughtProductProperties
+                    .Select(p => p.PropertyId)
+                    .ToHashSet();
+
+                result.AllAvailableProductProperties = result.ProductProperties
+                    .Where(p => !defaultPropertyIdSet.Contains(p.PropertyId)
+                             && !boughtPropertyIdSet.Contains(p.PropertyId))
+                    .Select(p => new GetAllAvailableProductPropertiesDto
+                    {
+                        PropertyId = p.PropertyId,
+                        PropertyTitle = p.PropertyTitle,
+                        Price = p.Price
+                    })
+                    .ToList();
             }
 
             return results;
+        }
+
+        private static List<int> ParsePropertyIds(string propertyString)
+        {
+            var result = new List<int>();
+            var span = propertyString.AsSpan();
+
+            foreach (var range in span.Split(','))
+            {
+                var trimmed = span[range].Trim();
+                if (trimmed.Length > 0 && int.TryParse(trimmed, out var id))
+                {
+                    result.Add(id);
+                }
+            }
+
+            return result;
+        }
+
+        private static bool MatchesProductId(string productIds, string productIdStr)
+        {
+            if (string.IsNullOrEmpty(productIds))
+                return false;
+
+            if (productIds == productIdStr)
+                return true;
+
+            var span = productIds.AsSpan();
+            var searchSpan = productIdStr.AsSpan();
+
+            if (span.StartsWith(searchSpan) && span.Length > searchSpan.Length && span[searchSpan.Length] == ',')
+                return true;
+
+            if (span.EndsWith(searchSpan) && span.Length > searchSpan.Length && span[span.Length - searchSpan.Length - 1] == ',')
+                return true;
+
+            var searchPattern = $",{productIdStr},";
+            return productIds.Contains(searchPattern);
         }
 
         private List<int> ResolveDefaultProperties(

@@ -7,7 +7,8 @@
         public int? UserId { get; set; }
         public int? ProductId { get; set; }
         public string? ProductName { get; set; }
-        public List<GetUserbuyedProductPropertiesDto> UserbuyedProductProperties { get; set; } = new();
+        public List<GetUserBoughtProductPropertiesDto> UserBoughtProductProperties { get; set; } = new();
+        public List<GetAllAvailableProductPropertiesDto> AllAvailableProductProperties { get; set; } = new();
         public List<GetProductPropertiesDto> ProductProperties { get; set; } = new();
         public List<GetDefaultProductPropertiesDto> DefaultProductProperties { get; set; } = new();
         public int? AgentId { get; set; }
@@ -38,8 +39,15 @@ public class GetDefaultProductPropertiesDto
 }
 
 
-public class GetUserbuyedProductPropertiesDto
+public class GetUserBoughtProductPropertiesDto
 {
     public int PropertyId { get; set; }
     public string? PropertyTitle { get; set; }
+}
+
+public class GetAllAvailableProductPropertiesDto
+{
+    public int PropertyId { get; set; }
+    public string? PropertyTitle { get; set; }
+    public long Price { get; set; }
 }
